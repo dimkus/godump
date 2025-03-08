@@ -18,6 +18,26 @@ type variable struct {
 	indent int64
 }
 
+// Stringer is implemented by any value that has a String method
+type Stringer interface {
+	String() string
+}
+
+// dump outputs a formatted string for the given value and name.
+// The string is indented with the current indent level, which is
+// incremented before the dump and decremented after.
+//
+// The output format is as follows:
+//
+//   - For arrays and slices, the type and length are printed,
+//     followed by the elements.
+//   - For maps, the type and key type are printed, followed by the
+//     key-value pairs.
+//   - For pointers, the type is printed, followed by the result of
+//     calling dump on the value.
+//   - For structs, the type is printed, followed by the fields.
+//   - For all other types, the value is printed using the fmt
+//     package's formatting rules.
 func (v *variable) dump(val reflect.Value, name string) {
 	v.indent++
 
@@ -42,6 +62,7 @@ func (v *variable) dump(val reflect.Value, name string) {
 			v.printType(name, val.Interface())
 			v.dump(val.Elem(), name)
 		case reflect.Struct:
+
 			v.printType(name, val.Interface())
 			for i := 0; i < typ.NumField(); i++ {
 				field := typ.Field(i)
@@ -57,16 +78,35 @@ func (v *variable) dump(val reflect.Value, name string) {
 	v.indent--
 }
 
+// printType writes a type information of value to the dump string.
+//
+// It adds an indentation prefix, name, type of value, and a newline character
+// to the dump string. If value implements Stringer interface, it also adds a
+// string representation of value to the dump string.
 func (v *variable) printType(name string, vv interface{}) {
 	v.printIndent()
+	_, ok := vv.(Stringer)
+	if ok {
+		v.Out = fmt.Sprintf("%s%s(%T) %s\n", v.Out, name, vv, vv)
+		return
+	}
+
 	v.Out = fmt.Sprintf("%s%s(%T)\n", v.Out, name, vv)
 }
 
+// printValue writes a value information of value to the dump string.
+//
+// It adds an indentation prefix, name, type of value, value formatted with
+// %#v, and a newline character to the dump string.
 func (v *variable) printValue(name string, vv interface{}) {
 	v.printIndent()
 	v.Out = fmt.Sprintf("%s%s(%T) %#v\n", v.Out, name, vv, vv)
 }
 
+// printIndent adds an indentation prefix to the dump string.
+//
+// The number of space characters in the prefix is twice the value of
+// v.indent.
 func (v *variable) printIndent() {
 	var i int64
 	for i = 0; i < v.indent; i++ {
@@ -80,7 +120,7 @@ func Dump(v interface{}) {
 	val := reflect.ValueOf(v)
 	dump := &variable{indent: -1}
 	dump.dump(val, "")
-	fmt.Printf("%s", dump.Out)
+	fmt.Print(dump.Out)
 }
 
 // Return the value that is passed as the argument with indentation.
